@@ -3,29 +3,26 @@ pipeline {
     agent any
 
     environment {
-        // App metadata
-        APP_NAME    = "ecommerce-app"
-        VERSION     = "1.0.${BUILD_NUMBER}"
+        APP_NAME = "todo-list"
+        VERSION  = "1.0.${BUILD_NUMBER}"
 
-        // Internal service URLs (running in Docker network)
-        SONAR_URL   = "http://sonarqube:9000"
-        NEXUS_URL   = "http://nexus:8081"
+        SONAR_URL = "http://sonarqube:9000"
+        NEXUS_URL = "http://nexus:8081"
 
-        // Docker Hub repo
-        IMAGE       = "charantejafk/ecommerce-app"
+        IMAGE = "charantejafk/todo-list"
     }
 
     stages {
 
-        /* ------------------------ CHECKOUT ------------------------ */
+        /* ------------------------ CLONE ------------------------ */
         stage('Checkout Code') {
             steps {
-                git url: 'https://github.com/Charantej-afk/E-commeres-repo.git', branch: 'main'
+                git url: 'https://github.com/Charantej-afk/To-do-list.git', branch: 'main'
             }
         }
 
-        /* ------------------------ BUILD ------------------------ */
-        stage('Build WAR') {
+        /* ------------------------ BUILD JAR ------------------------ */
+        stage('Build JAR') {
             steps {
                 sh """
                     mvn clean package -DskipTests
@@ -58,33 +55,38 @@ pipeline {
         }
 
         /* ------------------------ NEXUS UPLOAD ------------------------ */
-        stage('Upload WAR to Nexus') {
+        stage('Upload JAR to Nexus') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'NEXUS_CRED',
-                                                  usernameVariable: 'NEXUS_USER',
-                                                  passwordVariable: 'NEXUS_PSW')]) {
+                                                 usernameVariable: 'NEXUS_USER',
+                                                 passwordVariable: 'NEXUS_PSW')]) {
+
+                    script {
+                        JAR_FILE = sh(script: "ls target/*.jar | grep -v original", returnStdout: true).trim()
+                        echo "Detected JAR File: ${JAR_FILE}"
+                    }
+
                     sh """
-                        echo "Uploading WAR to Nexus..."
+                        echo "Uploading JAR to Nexus..."
                         curl -v -u $NEXUS_USER:$NEXUS_PSW \
-                        --upload-file target/${APP_NAME}.war \
-                        ${NEXUS_URL}/repository/maven-releases/com/ecommerce/${APP_NAME}/${VERSION}/${APP_NAME}-${VERSION}.war
+                        --upload-file ${JAR_FILE} \
+                        ${NEXUS_URL}/repository/maven-releases/com/app/${APP_NAME}/${VERSION}/${APP_NAME}-${VERSION}.jar
                     """
                 }
             }
         }
 
-        /* ------------------------ DOWNLOAD BACK FROM NEXUS ------------------------ */
-        stage('Download WAR from Nexus') {
+        /* ------------------------ NEXUS DOWNLOAD ------------------------ */
+        stage('Download JAR for Docker Image') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'NEXUS_CRED',
-                                                  usernameVariable: 'NEXUS_USER',
-                                                  passwordVariable: 'NEXUS_PSW')]) {
+                                                 usernameVariable: 'NEXUS_USER',
+                                                 passwordVariable: 'NEXUS_PSW')]) {
+
                     sh """
-                        rm -f ${APP_NAME}.war || true
-                        echo "Downloading WAR from Nexus..."
                         curl -u $NEXUS_USER:$NEXUS_PSW \
-                        -o ${APP_NAME}.war \
-                        ${NEXUS_URL}/repository/maven-releases/com/ecommerce/${APP_NAME}/${VERSION}/${APP_NAME}-${VERSION}.war
+                        -o ${APP_NAME}.jar \
+                        ${NEXUS_URL}/repository/maven-releases/com/app/${APP_NAME}/${VERSION}/${APP_NAME}-${VERSION}.jar
                     """
                 }
             }
@@ -100,12 +102,12 @@ pipeline {
             }
         }
 
-        /* ------------------------ DOCKER HUB PUSH ------------------------ */
+        /* ------------------------ DOCKER PUSH ------------------------ */
         stage('Push Docker Image') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'DOCKER_HUB',
-                                                  usernameVariable: 'DHUB_USER',
-                                                  passwordVariable: 'DHUB_PASS')]) {
+                                                 usernameVariable: 'DHUB_USER',
+                                                 passwordVariable: 'DHUB_PASS')]) {
 
                     sh """
                         echo $DHUB_PASS | docker login -u $DHUB_USER --password-stdin
@@ -116,8 +118,8 @@ pipeline {
             }
         }
 
-        /* ------------------------ DEPLOY TO TOMCAT (DOCKER) ------------------------ */
-        stage('Deploy Application') {
+        /* ------------------------ DEPLOY ------------------------ */
+        stage('Deploy To-Do App') {
             steps {
                 sh """
                     docker rm -f ${APP_NAME} || true
@@ -129,10 +131,10 @@ pipeline {
 
     post {
         success {
-            echo "🎉 Pipeline executed successfully!"
+            echo "🎉 To-Do List CI/CD Pipeline Completed Successfully!"
         }
         failure {
-            echo "❌ Pipeline failed!"
+            echo "❌ Pipeline Failed!"
         }
     }
 }
