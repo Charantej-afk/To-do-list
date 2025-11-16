@@ -1,37 +1,24 @@
-package com.charan.todo;
+package com.charantejafk.todo;
 
 import javax.servlet.*;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.*;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
-import java.util.ArrayList;
 
-@WebServlet("/todos") // Mapped to /todos URL
+@WebServlet("/todos")  // Mapped to /todos URL
 public class TodoServlet extends HttpServlet {
-
-    private List<TodoItem> todos = new ArrayList<>();
-
-    @Override
-    public void init() throws ServletException {
-        // Initialize with some sample todos
-        todos.add(new TodoItem(1, "Buy Groceries"));
-        todos.add(new TodoItem(2, "Finish Homework"));
-    }
-
+    
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        // Static list of todos (simple example)
+        List<String> todos = Arrays.asList("Buy Groceries", "Finish Homework", "Clean House");
+        
+        // Set todos as request attribute to pass to JSP
         request.setAttribute("todos", todos);
+        
+        // Forward the request to the todos.jsp page
         request.getRequestDispatcher("/WEB-INF/views/todos.jsp").forward(request, response);
-    }
-
-    @Override
-    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        String newTodo = request.getParameter("todo");
-        if (newTodo != null && !newTodo.trim().isEmpty()) {
-            int id = todos.size() + 1;
-            todos.add(new TodoItem(id, newTodo));
-        }
-        response.sendRedirect("todos");
     }
 }
