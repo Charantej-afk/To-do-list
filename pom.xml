@@ -25,19 +25,11 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- Tomcat for servlet container -->
+        <!-- Tomcat Catalina Dependency (for servlet container) -->
         <dependency>
             <groupId>org.apache.tomcat</groupId>
             <artifactId>tomcat-catalina</artifactId>
             <version>9.0.45</version>
-            <scope>provided</scope>
-        </dependency>
-
-        <!-- JSP API Dependency -->
-        <dependency>
-            <groupId>org.apache.jasper</groupId>
-            <artifactId>jasper-api</artifactId>
-            <version>4.0.0</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
@@ -58,4 +50,3 @@
         </plugins>
     </build>
 </project>
-
