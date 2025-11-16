@@ -1,9 +1,11 @@
+package com.charan.todo;
+
+import jakarta.servlet.*;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.*;
+import java.io.IOException;
+
 @WebServlet("/updateTodo")
 public class UpdateTodoServlet extends HttpServlet {
-    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        String oldTodo = request.getParameter("oldTodo");
-        String newTodo = request.getParameter("newTodo");
-        // Add logic to update the todo in your list or database
-        response.sendRedirect("todos");
-    }
+    // ... your existing code
 }
