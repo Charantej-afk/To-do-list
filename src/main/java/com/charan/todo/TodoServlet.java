@@ -1,16 +1,52 @@
 package com.charantejafk.todo;
 
-import jakarta.servlet.http.HttpServlet;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.annotation.WebServlet;  // Add this import
+import jakarta.servlet.*;
+import jakarta.servlet.http.*;
+import jakarta.servlet.annotation.WebServlet;  // Make sure this is imported
 import java.io.IOException;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 
-@WebServlet("/addTodo")
-public class AddTodoServlet extends HttpServlet {
-    protected void doPost(HttpServletRequest request, HttpServletResponse response) 
-            throws ServletException, IOException {
-        // Your implementation
+@WebServlet("/todos")
+public class TodoServlet extends HttpServlet {
+    
+    private transient List<TodoItem> todos = new ArrayList<>();
+
+    @Override
+    public void init() throws ServletException {
+        todos.add(new TodoItem(1, "Buy Groceries"));
+        todos.add(new TodoItem(2, "Finish Homework"));
+    }
+
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        request.setAttribute("todos", todos);
+        request.getRequestDispatcher("/WEB-INF/views/todos.jsp").forward(request, response);
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        String action = request.getParameter("action");
+
+        if ("add".equals(action)) {
+            String description = request.getParameter("description");
+            if (description != null && !description.trim().isEmpty()) {
+                int id = todos.size() + 1;
+                todos.add(new TodoItem(id, description));
+            }
+        } else if ("toggle".equals(action)) {
+            int toggleId = Integer.parseInt(request.getParameter("toggleId"));
+            for (TodoItem todo : todos) {
+                if (todo.getId() == toggleId) {
+                    todo.setCompleted(!todo.isCompleted());
+                    break;
+                }
+            }
+        } else if ("clearCompleted".equals(action)) {
+            todos.removeIf(TodoItem::isCompleted);
+        }
+
+        response.sendRedirect(request.getContextPath() + "/todos");
     }
 }
