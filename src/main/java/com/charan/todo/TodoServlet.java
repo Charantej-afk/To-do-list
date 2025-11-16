@@ -1,16 +1,14 @@
 package com.charantejafk.todo;
 
-import jakarta.servlet.http.HttpServlet;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.annotation.WebServlet;  // ADD THIS IMPORT
+import jakarta.servlet.*;
+import jakarta.servlet.http.*;
+import jakarta.servlet.annotation.WebServlet;  // Make sure this is here
 import java.io.IOException;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 
-@WebServlet("/addTodo")
-public class AddTodoServlet extends HttpServlet {
-    protected void doPost(HttpServletRequest request, HttpServletResponse response) 
-            throws ServletException, IOException {
-        // Your implementation
-    }
+@WebServlet("/todos")
+public class TodoServlet extends HttpServlet {
+    // ... your code
 }
