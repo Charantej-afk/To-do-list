@@ -1,100 +1,258 @@
-name: TodoApp CI/CD Pipeline
+name: CI/CD Pipeline
+
 on:
   push:
-    branches: [ main, develop ]
+    branches:
+      - main
+  workflow_dispatch:
 
 env:
-  APP_NAME: "todo-webapp"
-  VERSION: "1.0.${{ github.run_number }}"
-  DOCKER_IMAGE: "charantejafk/todo-webapp"
-
-# Add permissions at workflow level to fix security warnings
-permissions:
-  contents: read
-  security-events: write
+  DOCKER_IMAGE: charantejafk/todo-webapp
+  NEXUS_URL: http://184.73.21.57:8081
+  SONAR_HOST_URL: http://184.73.21.57:9000
 
 jobs:
-  build-and-deploy:
+  build-and-test:
+    name: Build and Test
     runs-on: ubuntu-latest
     
     steps:
-    # ==================== CHECKOUT CODE ====================
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
+      
+      - name: Set up Maven
+        uses: stCarolas/setup-maven@v5
+        with:
+          maven-version: 3.8.6
+      
+      - name: Build with Maven
+        run: mvn clean compile -DskipTests
+      
+      - name: Run tests
+        run: mvn test
+      
+      - name: Package WAR
+        run: mvn package -DskipTests
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/target/surefire-reports/*.xml'
+          retention-days: 7
+      
+      - name: Upload WAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: webapp-war
+          path: target/*.war
+          retention-days: 7
 
-    # ==================== SETUP JAVA & MAVEN ====================
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        cache: maven
+  sonarqube-analysis:
+    name: SonarQube Analysis
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      
+      - name: Download WAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: webapp-war
+          path: target/
+      
+      - name: SonarQube Scan
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          mvn sonar:sonar \
+            -Dsonar.host.url=${{ env.SONAR_HOST_URL }} \
+            -Dsonar.login=$SONAR_TOKEN \
+            -Dsonar.projectKey=todo-webapp \
+            -Dsonar.projectName="Todo Web Application"
 
-    # ==================== BUILD WAR ====================
-    - name: Build WAR
-      run: |
-        echo "🔨 Building WAR file..."
-        mvn clean package -DskipTests
-        echo "📦 Generated artifacts:"
-        ls -la target/
-        # Copy WAR file to root for Docker
-        cp target/*.war app.war 2>/dev/null || echo "No WAR file found - check Maven build"
+  deploy-to-nexus:
+    name: Deploy to Nexus
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      
+      - name: Download WAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: webapp-war
+          path: target/
+      
+      - name: Deploy to Nexus
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+        run: |
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          WAR_FILE=$(ls target/*.war)
+          
+          echo "Deploying $WAR_FILE to Nexus..."
+          curl -v -u $NEXUS_USERNAME:$NEXUS_PASSWORD \
+            --upload-file "$WAR_FILE" \
+            "${{ env.NEXUS_URL }}/repository/maven-releases/com/charantejafk/todo-webapp/$VERSION/todo-webapp-$VERSION.war"
 
-    # ==================== SETUP DOCKER ====================
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+  build-and-push-docker:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: [build-and-test, sonarqube-analysis]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download WAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: webapp-war
+          path: target/
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      - name: Extract version from pom.xml
+        id: version
+        run: |
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "build_number=${{ github.run_number }}" >> $GITHUB_OUTPUT
+      
+      - name: Copy WAR file for Docker
+        run: |
+          cp target/*.war ROOT.war
+          ls -la ROOT.war
+      
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ env.DOCKER_IMAGE }}:${{ github.run_number }}
+            ${{ env.DOCKER_IMAGE }}:${{ steps.version.outputs.short_sha }}
+            ${{ env.DOCKER_IMAGE }}:latest
+          labels: |
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=registry,ref=${{ env.DOCKER_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.DOCKER_IMAGE }}:buildcache,mode=max
+      
+      - name: Image digest
+        run: |
+          echo "Docker image pushed successfully with tags:"
+          echo "- ${{ env.DOCKER_IMAGE }}:${{ github.run_number }}"
+          echo "- ${{ env.DOCKER_IMAGE }}:${{ steps.version.outputs.short_sha }}"
+          echo "- ${{ env.DOCKER_IMAGE }}:latest"
 
-    # ==================== BUILD DOCKER IMAGE ====================
-    - name: Build Docker Image
-      run: |
-        echo "🐳 Building Docker image..."
-        docker build -t $DOCKER_IMAGE:$VERSION .
-        docker tag $DOCKER_IMAGE:$VERSION $DOCKER_IMAGE:latest
-        echo "📋 Built images:"
-        docker images | grep $DOCKER_IMAGE
-
-    # ==================== SECURITY SCAN (OPTIONAL - SKIP IF ISSUES) ====================
-    - name: Run Trivy vulnerability scanner
-      id: trivy-scan
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: $DOCKER_IMAGE:$VERSION
-        format: 'table'
-      continue-on-error: true
-
-    # ==================== PUSH TO DOCKER HUB ====================
-    - name: Push Docker Image
-      env:
-        DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-        DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      run: |
-        echo "📤 Pushing Docker image to Docker Hub..."
-        echo $DOCKERHUB_TOKEN | docker login -u $DOCKERHUB_USERNAME --password-stdin
-        docker push $DOCKER_IMAGE:$VERSION
-        docker push $DOCKER_IMAGE:latest
-        echo "✅ Images pushed successfully"
-
-    # ==================== SUCCESS MESSAGE ====================
-    - name: Pipeline Success
-      run: |
-        echo "🎉 CI/CD PIPELINE COMPLETED SUCCESSFULLY!"
-        echo "=========================================="
-        echo ""
-        echo "📊 Build Information:"
-        echo "   - Application: $APP_NAME"
-        echo "   - Version: $VERSION"
-        echo "   - Docker Image: $DOCKER_IMAGE:latest"
-        echo ""
-        echo "🚀 Deployment Ready!"
-        echo "   Run these commands on your server (184.73.21.57):"
-        echo ""
-        echo "   # Pull and deploy the new version"
-        echo "   docker pull $DOCKER_IMAGE:latest"
-        echo "   docker rm -f todo-webapp || true"
-        echo "   docker run -d --name todo-webapp --network cicd-network -p 8080:8080 $DOCKER_IMAGE:latest"
-        echo ""
-        echo "   # Verify deployment"
-        echo "   curl http://184.73.21.57:8080/todos"
-        echo ""
-        echo "🌐 Application URL: http://184.73.21.57:8080/todos"
-        echo "🐳 Docker Hub: https://hub.docker.com/r/charantejafk/todo-webapp"
+  deploy-to-tomcat:
+    name: Deploy to Tomcat
+    runs-on: ubuntu-latest
+    needs: build-and-push-docker
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Generate deployment script
+        run: |
+          cat > deploy.sh << 'EOF'
+          #!/bin/bash
+          echo "🚀 Starting deployment..."
+          
+          # Pull latest image
+          docker pull ${{ env.DOCKER_IMAGE }}:latest
+          
+          # Stop and remove existing container
+          docker rm -f todo-webapp || true
+          
+          # Deploy new container
+          docker run -d \
+            --name todo-webapp \
+            --network cicd-network \
+            -p 8080:8080 \
+            ${{ env.DOCKER_IMAGE }}:latest
+          
+          # Wait for application to start
+          sleep 30
+          
+          # Verify deployment
+          echo "🔍 Verifying deployment..."
+          if curl -s -f http://localhost:8080/todos > /dev/null; then
+            echo "✅ Deployment successful!"
+            echo "🌐 Application URL: http://184.73.21.57:8080/todos"
+          else
+            echo "❌ Deployment verification failed"
+            docker logs todo-webapp
+            exit 1
+          fi
+          EOF
+          
+          chmod +x deploy.sh
+          echo "Deployment script created"
+      
+      - name: Upload deployment script
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-script
+          path: deploy.sh
+          retention-days: 1
+      
+      - name: Deployment summary
+        run: |
+          echo "🎉 CI/CD Pipeline Completed Successfully!"
+          echo "=========================================="
+          echo ""
+          echo "📦 Artifacts:"
+          echo "   - Docker Image: ${{ env.DOCKER_IMAGE }}:latest"
+          echo "   - Version: ${{ needs.build-and-push-docker.outputs.version }}"
+          echo "   - Nexus: ${{ env.NEXUS_URL }}"
+          echo ""
+          echo "🚀 Deployment Commands:"
+          echo "   docker pull ${{ env.DOCKER_IMAGE }}:latest"
+          echo "   docker rm -f todo-webapp || true"
+          echo "   docker run -d --name todo-webapp --network cicd-network -p 8080:8080 ${{ env.DOCKER_IMAGE }}:latest"
+          echo ""
+          echo "🌐 Application URL: http://184.73.21.57:8080/todos"
