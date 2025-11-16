@@ -1,0 +1,115 @@
+name: To-Do WebApp CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  APP_NAME: "todo-webapp"
+  VERSION: "1.0.${{ github.run_number }}"
+  IMAGE: "charantejafk/todo-webapp"
+
+jobs:
+  ci-cd-pipeline:
+    runs-on: ubuntu-latest
+    
+    services:
+      sonarqube:
+        image: sonarqube:9.9-community
+        ports:
+          - 9000:9000
+        env:
+          SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: true
+        options: >-
+          --health-cmd="curl -f http://localhost:9000/api/system/status || exit 1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+    # ------------------------ CHECKOUT ------------------------
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Shallow clones should be disabled for better SonarQube analysis
+
+    # ------------------------ SETUP JAVA & MAVEN ------------------------
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: maven
+
+    # ------------------------ BUILD WAR ------------------------
+    - name: Build WAR
+      run: |
+        mvn clean package -DskipTests
+        ls -l target/
+
+    # ------------------------ SONARQUBE SCAN ------------------------
+    - name: SonarQube Scan
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      run: |
+        mvn sonar:sonar \
+          -Dsonar.host.url=http://localhost:9000 \
+          -Dsonar.login=$SONAR_TOKEN \
+          -Dsonar.projectKey=todo-webapp \
+          -Dsonar.projectName="To-Do WebApp"
+
+    # Note: Quality Gate check would require SonarQube webhook setup
+    # For GitHub Actions, consider using SonarCloud instead
+
+    # ------------------------ SETUP DOCKER BUILDX ------------------------
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    # ------------------------ DOCKER IMAGE BUILD ------------------------
+    - name: Build Docker Image
+      run: |
+        docker build -t $IMAGE:$VERSION .
+        docker tag $IMAGE:$VERSION $IMAGE:latest
+
+    # ------------------------ DOCKER PUSH ------------------------
+    - name: Push Docker Image
+      run: |
+        echo ${{ secrets.DOCKERHUB_PASSWORD }} | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
+        docker push $IMAGE:$VERSION
+        docker push $IMAGE:latest
+
+    # ------------------------ DEPLOY (Optional - for testing) ------------------------
+    - name: Deploy for Testing
+      run: |
+        docker rm -f $APP_NAME || true
+        docker run -d --name $APP_NAME -p 8080:8080 $IMAGE:latest
+        sleep 10  # Wait for app to start
+        curl -f http://localhost:8080/todos || exit 1
+
+    # ------------------------ NEXUS UPLOAD (Optional) ------------------------
+    - name: Upload WAR to Nexus
+      if: always()  # Optional step, run even if previous steps fail
+      env:
+        NEXUS_URL: ${{ secrets.NEXUS_URL }}
+        NEXUS_USER: ${{ secrets.NEXUS_USER }}
+        NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+      run: |
+        WAR_FILE=$(ls target/*.war)
+        echo "Uploading WAR to Nexus: $WAR_FILE"
+        curl -v -u $NEXUS_USER:$NEXUS_PASSWORD \
+          --upload-file $WAR_FILE \
+          $NEXUS_URL/repository/maven-releases/com/app/$APP_NAME/$VERSION/$APP_NAME-$VERSION.war
+
+    # ------------------------ NOTIFICATION ------------------------
+    - name: Notify Success
+      if: success()
+      run: |
+        echo "🎉 To-Do WebApp CI/CD Pipeline Completed Successfully!"
+        echo "Docker Image: $IMAGE:$VERSION"
+
+    - name: Notify Failure
+      if: failure()
+      run: |
+        echo "❌ Pipeline Failed!"
