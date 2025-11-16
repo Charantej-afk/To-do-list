@@ -1,17 +1,15 @@
-package com.charan.todo;
-
-import java.time.Instant;
+package com.charantejafk.todo;
 
 public class TodoItem {
-    private final int id;
-    private final String description;
+
+    private int id;
+    private String description;
     private boolean completed;
-    private final Instant createdAt;
 
     public TodoItem(int id, String description) {
         this.id = id;
         this.description = description;
-        this.createdAt = Instant.now();
+        this.completed = false;
     }
 
     public int getId() {
@@ -26,11 +24,7 @@ public class TodoItem {
         return completed;
     }
 
-    public void toggle() {
-        this.completed = !this.completed;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
+    public void setCompleted(boolean completed) {
+        this.completed = completed;
     }
 }
