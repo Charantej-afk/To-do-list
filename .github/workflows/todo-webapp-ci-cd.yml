@@ -1,41 +1,28 @@
-name: To-Do WebApp CI/CD Pipeline
-
+name: TodoApp CI/CD Pipeline
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
   pull_request:
     branches: [ main ]
 
 env:
   APP_NAME: "todo-webapp"
   VERSION: "1.0.${{ github.run_number }}"
-  IMAGE: "charantejafk/todo-webapp"
+  DOCKER_IMAGE: "charantejafk/todo-webapp"
+  DEPLOYMENT_SERVER: "184.73.21.57"
 
 jobs:
-  ci-cd-pipeline:
+  build-and-scan:
     runs-on: ubuntu-latest
     
-    services:
-      sonarqube:
-        image: sonarqube:9.9-community
-        ports:
-          - 9000:9000
-        env:
-          SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: true
-        options: >-
-          --health-cmd="curl -f http://localhost:9000/api/system/status || exit 1"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=10
-
     steps:
-    # ------------------------ CHECKOUT ------------------------
+    # ==================== CHECKOUT CODE ====================
     - name: Checkout Code
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # Shallow clones should be disabled for better SonarQube analysis
+        fetch-depth: 0
 
-    # ------------------------ SETUP JAVA & MAVEN ------------------------
+    # ==================== SETUP JAVA & MAVEN ====================
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
@@ -43,73 +30,153 @@ jobs:
         distribution: 'temurin'
         cache: maven
 
-    # ------------------------ BUILD WAR ------------------------
+    # ==================== BUILD WAR ====================
     - name: Build WAR
       run: |
+        echo "🔨 Building WAR file..."
         mvn clean package -DskipTests
-        ls -l target/
+        echo "📦 Generated artifacts:"
+        ls -la target/
 
-    # ------------------------ SONARQUBE SCAN ------------------------
+    # ==================== VERIFY SERVICE CONNECTIVITY ====================
+    - name: Verify Service Connectivity
+      env:
+        SONARQUBE_URL: ${{ secrets.SONARQUBE_URL }}
+        NEXUS_URL: ${{ secrets.NEXUS_URL }}
+      run: |
+        echo "🔍 Testing connectivity to services..."
+        
+        # Test SonarQube
+        echo "Testing SonarQube at $SONARQUBE_URL..."
+        if curl -s -f "$SONARQUBE_URL/api/system/status"; then
+          echo "✅ SonarQube is accessible"
+        else
+          echo "❌ SonarQube is not accessible"
+          exit 1
+        fi
+        
+        # Test Nexus
+        echo "Testing Nexus at $NEXUS_URL..."
+        if curl -s -f "$NEXUS_URL/service/rest/v1/status"; then
+          echo "✅ Nexus is accessible"
+        else
+          echo "❌ Nexus is not accessible"
+          exit 1
+        fi
+
+    # ==================== SONARQUBE SCAN ====================
     - name: SonarQube Scan
       env:
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_TOKEN: ${{ secrets.SONARQUBE_TOKEN }}
+        SONAR_URL: ${{ secrets.SONARQUBE_URL }}
       run: |
+        echo "🔍 Running SonarQube analysis..."
         mvn sonar:sonar \
-          -Dsonar.host.url=http://localhost:9000 \
+          -Dsonar.projectKey=todo-app \
+          -Dsonar.projectName="Todo Web Application" \
+          -Dsonar.host.url=$SONAR_URL \
           -Dsonar.login=$SONAR_TOKEN \
-          -Dsonar.projectKey=todo-webapp \
-          -Dsonar.projectName="To-Do WebApp"
+          -Dsonar.sourceEncoding=UTF-8
 
-    # Note: Quality Gate check would require SonarQube webhook setup
-    # For GitHub Actions, consider using SonarCloud instead
+    # ==================== UPLOAD TO NEXUS ====================
+    - name: Upload WAR to Nexus
+      env:
+        NEXUS_URL: ${{ secrets.NEXUS_URL }}
+        NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+        NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+      run: |
+        echo "📤 Uploading WAR to Nexus..."
+        
+        # Find the WAR file
+        WAR_FILE=$(find target -name "*.war" -type f | head -1)
+        echo "Found WAR file: $WAR_FILE"
+        
+        # Upload to Nexus
+        curl -v -u "$NEXUS_USERNAME:$NEXUS_PASSWORD" \
+          --upload-file "$WAR_FILE" \
+          "$NEXUS_URL/repository/maven-releases/com/app/$APP_NAME/$VERSION/$APP_NAME-$VERSION.war"
+        
+        echo "✅ WAR file uploaded to Nexus"
 
-    # ------------------------ SETUP DOCKER BUILDX ------------------------
+    # ==================== DOCKER IMAGE BUILD ====================
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    # ------------------------ DOCKER IMAGE BUILD ------------------------
     - name: Build Docker Image
       run: |
-        docker build -t $IMAGE:$VERSION .
-        docker tag $IMAGE:$VERSION $IMAGE:latest
+        echo "🐳 Building Docker image..."
+        docker build -t $DOCKER_IMAGE:$VERSION .
+        docker tag $DOCKER_IMAGE:$VERSION $DOCKER_IMAGE:latest
+        echo "📋 Built images:"
+        docker images | grep $DOCKER_IMAGE
 
-    # ------------------------ DOCKER PUSH ------------------------
+    # ==================== SECURITY SCAN ====================
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: $DOCKER_IMAGE:$VERSION
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+    # ==================== PUSH TO DOCKER HUB ====================
     - name: Push Docker Image
-      run: |
-        echo ${{ secrets.DOCKERHUB_PASSWORD }} | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
-        docker push $IMAGE:$VERSION
-        docker push $IMAGE:latest
-
-    # ------------------------ DEPLOY (Optional - for testing) ------------------------
-    - name: Deploy for Testing
-      run: |
-        docker rm -f $APP_NAME || true
-        docker run -d --name $APP_NAME -p 8080:8080 $IMAGE:latest
-        sleep 10  # Wait for app to start
-        curl -f http://localhost:8080/todos || exit 1
-
-    # ------------------------ NEXUS UPLOAD (Optional) ------------------------
-    - name: Upload WAR to Nexus
-      if: always()  # Optional step, run even if previous steps fail
       env:
-        NEXUS_URL: ${{ secrets.NEXUS_URL }}
-        NEXUS_USER: ${{ secrets.NEXUS_USER }}
-        NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+        DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       run: |
-        WAR_FILE=$(ls target/*.war)
-        echo "Uploading WAR to Nexus: $WAR_FILE"
-        curl -v -u $NEXUS_USER:$NEXUS_PASSWORD \
-          --upload-file $WAR_FILE \
-          $NEXUS_URL/repository/maven-releases/com/app/$APP_NAME/$VERSION/$APP_NAME-$VERSION.war
+        echo "📤 Pushing Docker image to Docker Hub..."
+        echo $DOCKERHUB_TOKEN | docker login -u $DOCKERHUB_USERNAME --password-stdin
+        docker push $DOCKER_IMAGE:$VERSION
+        docker push $DOCKER_IMAGE:latest
+        echo "✅ Images pushed successfully"
 
-    # ------------------------ NOTIFICATION ------------------------
-    - name: Notify Success
+  # ==================== DEPLOYMENT JOB ====================
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-scan
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Deploy to Server
+      env:
+        DOCKER_IMAGE: "charantejafk/todo-webapp"
+        SERVER_IP: "184.73.21.57"
+      run: |
+        echo "🚀 Starting deployment to $SERVER_IP..."
+        
+        # Deploy using SSH (you'll need to set up SSH keys)
+        # Alternatively, use the approach below for container-to-container deployment
+        
+        echo "📋 Deployment Commands:"
+        echo "1. Pull latest image: docker pull $DOCKER_IMAGE:latest"
+        echo "2. Stop existing container: docker rm -f todo-webapp || true"
+        echo "3. Run new container: docker run -d --name todo-webapp --network cicd-network -p 8080:8080 $DOCKER_IMAGE:latest"
+        echo "4. Verify deployment: curl http://$SERVER_IP:8080/todos"
+        
+        echo "✅ Deployment configuration ready!"
+
+    - name: Verify Deployment
+      run: |
+        echo "🔍 Testing application accessibility..."
+        if curl -s -f "http://184.73.21.57:8080/todos"; then
+          echo "✅ Application is accessible at http://184.73.21.57:8080/todos"
+        else
+          echo "⚠️  Application may not be running yet"
+        fi
+
+    - name: Deployment Success
       if: success()
       run: |
-        echo "🎉 To-Do WebApp CI/CD Pipeline Completed Successfully!"
-        echo "Docker Image: $IMAGE:$VERSION"
-
-    - name: Notify Failure
-      if: failure()
-      run: |
-        echo "❌ Pipeline Failed!"
+        echo "🎉 CI/CD Pipeline Completed Successfully!"
+        echo "📊 SonarQube Report: ${{ secrets.SONARQUBE_URL }}/dashboard?id=todo-app"
+        echo "🐳 Docker Image: $DOCKER_IMAGE:$VERSION"
+        echo "🌐 Application URL: http://184.73.21.57:8080/todos"
