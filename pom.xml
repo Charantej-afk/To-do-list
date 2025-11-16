@@ -17,39 +17,15 @@
     </properties>
 
     <dependencies>
-        <!-- Jakarta Servlet API Dependency -->
+        <!-- Java Servlet API Dependency (javax.servlet) -->
         <dependency>
-            <groupId>jakarta.servlet</groupId>
-            <artifactId>jakarta.servlet-api</artifactId>
-            <version>6.0.0</version>
+            <groupId>javax.servlet</groupId>
+            <artifactId>javax.servlet-api</artifactId>
+            <version>4.0.1</version>
             <scope>provided</scope>
         </dependency>
 
-        <!-- Tomcat Dependency for JARs required by the Servlet -->
-        <dependency>
-            <groupId>org.apache.tomcat</groupId>
-            <artifactId>tomcat-catalina</artifactId>
-            <version>9.0.45</version>
-            <scope>provided</scope>
-        </dependency>
-
-        <!-- JSTL (JavaServer Pages Standard Tag Library) -->
-        <dependency>
-            <groupId>jakarta.servlet.jsp</groupId>
-            <artifactId>jakarta.servlet.jsp-api</artifactId>
-            <version>2.0.0</version>
-            <scope>provided</scope>
-        </dependency>
-
-        <!-- JSP Support (if necessary for your JSP files) -->
-        <dependency>
-            <groupId>org.apache.tomcat</groupId>
-            <artifactId>tomcat-jsp-api</artifactId>
-            <version>9.0.45</version>
-            <scope>provided</scope>
-        </dependency>
-
-        <!-- Tomcat JASPER API (for compiling JSPs) -->
+        <!-- Apache Jasper for JSP Compilation -->
         <dependency>
             <groupId>org.apache.jasper</groupId>
             <artifactId>jasper-api</artifactId>
@@ -57,7 +33,23 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- Apache Commons IO for handling IO operations -->
+        <!-- Tomcat JSP API for JSP support -->
+        <dependency>
+            <groupId>org.apache.tomcat</groupId>
+            <artifactId>tomcat-jsp-api</artifactId>
+            <version>9.0.45</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- JSTL (JavaServer Pages Standard Tag Library) -->
+        <dependency>
+            <groupId>javax.servlet</groupId>
+            <artifactId>jstl</artifactId>
+            <version>1.2</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Commons IO for handling IO operations -->
         <dependency>
             <groupId>commons-io</groupId>
             <artifactId>commons-io</artifactId>
