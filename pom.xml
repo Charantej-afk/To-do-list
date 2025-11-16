@@ -32,6 +32,37 @@
             <version>9.0.45</version>
             <scope>provided</scope>
         </dependency>
+
+        <!-- JSTL (JavaServer Pages Standard Tag Library) -->
+        <dependency>
+            <groupId>jakarta.servlet.jsp</groupId>
+            <artifactId>jakarta.servlet.jsp-api</artifactId>
+            <version>2.0.0</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- JSP Support (if necessary for your JSP files) -->
+        <dependency>
+            <groupId>org.apache.tomcat</groupId>
+            <artifactId>tomcat-jsp-api</artifactId>
+            <version>9.0.45</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Tomcat JASPER API (for compiling JSPs) -->
+        <dependency>
+            <groupId>org.apache.jasper</groupId>
+            <artifactId>jasper-api</artifactId>
+            <version>4.0.0</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Apache Commons IO for handling IO operations -->
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+            <version>2.11.0</version>
+        </dependency>
     </dependencies>
 
     <build>
