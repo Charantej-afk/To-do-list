@@ -1,4 +1,4 @@
-package com.charantejafk.todo;
+package com.charan.todo;
 
 import jakarta.servlet.*;
 import jakarta.servlet.http.*;

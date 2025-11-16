@@ -1,4 +1,4 @@
-package com.charantejafk.todo;
+package com.charan.todo;
 
 import java.io.Serializable;
 
