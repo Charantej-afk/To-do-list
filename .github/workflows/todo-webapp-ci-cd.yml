@@ -9,20 +9,13 @@ env:
   DOCKER_IMAGE: "charantejafk/todo-webapp"
 
 jobs:
-  build-and-scan:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    
-    # Add permissions for security scanning
-    permissions:
-      security-events: write
-      contents: read
     
     steps:
     # ==================== CHECKOUT CODE ====================
     - name: Checkout Code
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
 
     # ==================== SETUP JAVA & MAVEN ====================
     - name: Set up JDK 17
@@ -39,37 +32,43 @@ jobs:
         mvn clean package -DskipTests
         echo "📦 Generated artifacts:"
         ls -la target/
+        # Verify WAR file exists
+        if [ ! -f target/*.war ]; then
+          echo "❌ No WAR file found!"
+          exit 1
+        fi
 
-    # ==================== SKIP CONNECTIVITY TEST (FOR NOW) ====================
-    - name: Skip External Service Checks
-      run: |
-        echo "⚠️  Skipping external service connectivity checks"
-        echo "This is normal if services are not publicly accessible"
-        echo "We'll proceed with local build and Docker image creation"
-
-    # ==================== DOCKER IMAGE BUILD ====================
+    # ==================== SETUP DOCKER ====================
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
+    # ==================== BUILD DOCKER IMAGE ====================
     - name: Build Docker Image
       run: |
         echo "🐳 Building Docker image..."
+        # List available images for debugging
+        echo "Available Maven images on Docker Hub:"
+        echo "- maven:3.8.7-openjdk-17"
+        echo "- maven:3.9.6-eclipse-temurin-17" 
+        echo "- maven:3.8.6-openjdk-17"
+        
+        # Build with simple Dockerfile
         docker build -t $DOCKER_IMAGE:$VERSION .
         docker tag $DOCKER_IMAGE:$VERSION $DOCKER_IMAGE:latest
         echo "📋 Built images:"
         docker images | grep $DOCKER_IMAGE
 
-    # ==================== SECURITY SCAN (UPDATED) ====================
+    # ==================== SECURITY SCAN ====================
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
       with:
         image-ref: $DOCKER_IMAGE:$VERSION
         format: 'sarif'
         output: 'trivy-results.sarif'
-      continue-on-error: true  # Don't fail pipeline on security findings
+      continue-on-error: true
 
     - name: Upload Trivy scan results
-      uses: github/codeql-action/upload-sarif@v4  # Updated to v4
+      uses: github/codeql-action/upload-sarif@v4
       if: always()
       with:
         sarif_file: 'trivy-results.sarif'
@@ -86,45 +85,8 @@ jobs:
         docker push $DOCKER_IMAGE:latest
         echo "✅ Images pushed successfully"
 
-    # ==================== SONARQUBE SCAN (OPTIONAL - RUN ON SERVER) ====================
-    - name: Create SonarQube Script for Server
-      run: |
-        cat > sonar-scan.sh << 'EOF'
-        #!/bin/bash
-        echo "Running SonarQube scan on server..."
-        mvn sonar:sonar \
-          -Dsonar.projectKey=todo-app \
-          -Dsonar.projectName="Todo Web Application" \
-          -Dsonar.host.url=http://sonarqube:9000 \
-          -Dsonar.login=$SONAR_TOKEN
-        EOF
-        chmod +x sonar-scan.sh
-        echo "📄 SonarQube scan script created - run this on your server"
-
-    # ==================== NEXUS UPLOAD (OPTIONAL - RUN ON SERVER) ====================
-    - name: Create Nexus Upload Script for Server
-      run: |
-        cat > nexus-upload.sh << 'EOF'
-        #!/bin/bash
-        WAR_FILE=$(find target -name "*.war" -type f | head -1)
-        curl -v -u $NEXUS_USER:$NEXUS_PASS \
-          --upload-file "$WAR_FILE" \
-          http://nexus:8081/repository/maven-releases/com/app/$APP_NAME/$VERSION/$APP_NAME-$VERSION.war
-        EOF
-        chmod +x nexus-upload.sh
-        echo "📄 Nexus upload script created - run this on your server"
-
-  # ==================== DEPLOYMENT ====================
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build-and-scan
-    if: github.ref == 'refs/heads/main'
-    
-    steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
-
-    - name: Generate Deployment Script
+    # ==================== GENERATE DEPLOYMENT SCRIPT ====================
+    - name: Create Deployment Script
       run: |
         cat > deploy.sh << 'EOF'
         #!/bin/bash
@@ -147,29 +109,38 @@ jobs:
         sleep 30
         
         # Verify deployment
-        if curl -f http://localhost:8080/todos; then
-          echo "✅ Deployment successful!"
+        echo "🔍 Verifying deployment..."
+        if curl -s -f http://localhost:8080/todos > /dev/null; then
+          echo "✅ Deployment successful! Application is running."
+          echo "🌐 Access your app at: http://$(curl -s ifconfig.me):8080/todos"
         else
-          echo "❌ Deployment failed!"
+          echo "❌ Deployment failed - application not responding"
           exit 1
         fi
         EOF
         chmod +x deploy.sh
         echo "📄 Deployment script created"
 
+    # ==================== FINAL INSTRUCTIONS ====================
     - name: Show Deployment Instructions
       run: |
-        echo "🎯 DEPLOYMENT INSTRUCTIONS:"
-        echo "============================"
-        echo "1. SSH to your server: ssh ubuntu@184.73.21.57"
-        echo "2. Run the deployment script: ./deploy.sh"
-        echo "3. Verify application: curl http://184.73.21.57:8080/todos"
+        echo "🎯 DEPLOYMENT INSTRUCTIONS"
+        echo "=========================="
         echo ""
-        echo "📊 Application URL: http://184.73.21.57:8080/todos"
-        echo "🐳 Docker Image: charantejafk/todo-webapp:latest"
-
-    - name: Final Success Message
-      run: |
-        echo "✅ CI/CD Pipeline Completed!"
-        echo "📦 Docker image pushed to Docker Hub"
-        echo "🚀 Ready for deployment to your server"
+        echo "✅ BUILD COMPLETED SUCCESSFULLY!"
+        echo "📦 Docker Image: charantejafk/todo-webapp:latest"
+        echo "🏷️  Version: $VERSION"
+        echo ""
+        echo "🚀 TO DEPLOY:"
+        echo "1. SSH to your server:"
+        echo "   ssh ubuntu@184.73.21.57"
+        echo ""
+        echo "2. Run deployment commands:"
+        echo "   docker pull charantejafk/todo-webapp:latest"
+        echo "   docker rm -f todo-webapp || true"
+        echo "   docker run -d --name todo-webapp --network cicd-network -p 8080:8080 charantejafk/todo-webapp:latest"
+        echo ""
+        echo "3. Verify deployment:"
+        echo "   curl http://localhost:8080/todos"
+        echo ""
+        echo "🌐 PUBLIC URL: http://184.73.21.57:8080/todos"
