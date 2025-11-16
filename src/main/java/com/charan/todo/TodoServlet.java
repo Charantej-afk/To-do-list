@@ -1,25 +1,16 @@
 package com.charantejafk.todo;
 
-import jakarta.servlet.*;
-import jakarta.servlet.annotation.WebServlet;
-import jakarta.servlet.http.*;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.WebServlet;  // Add this import
 import java.io.IOException;
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
 
-@WebServlet("/todos")
-public class TodoServlet extends HttpServlet {
-    
-    // Make the list transient or ensure TodoItem is serializable
-    private transient List<TodoItem> todos = new ArrayList<>();
-
-    @Override
-    public void init() throws ServletException {
-        // Initial tasks
-        todos.add(new TodoItem(1, "Buy Groceries"));
-        todos.add(new TodoItem(2, "Finish Homework"));
+@WebServlet("/addTodo")
+public class AddTodoServlet extends HttpServlet {
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) 
+            throws ServletException, IOException {
+        // Your implementation
     }
-
-    // ... rest of your code
 }
