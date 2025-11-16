@@ -20,9 +20,8 @@
     <h1>My Todo List</h1>
 
     <!-- Add new task form -->
-    <form method="post" action="todos">
+    <form method="post" action="addTodo">
         <input type="text" name="description" placeholder="Add a new task..." required>
-        <input type="hidden" name="action" value="add">
         <button type="submit">Add Task</button>
     </form>
 
@@ -34,9 +33,9 @@
                 for (TodoItem todo : todos) {
         %>
             <li class="todo-item">
-                <form method="post" action="todos" style="display:inline;">
-                    <input type="hidden" name="action" value="toggle">
-                    <input type="hidden" name="toggleId" value="<%= todo.getId() %>">
+                <form method="post" action="updateTodo" style="display:inline;">
+                    <input type="hidden" name="id" value="<%= todo.getId() %>">
+                    <input type="hidden" name="completed" value="<%= !todo.isCompleted() %>">
                     <input type="checkbox" <%= todo.isCompleted() ? "checked" : "" %> onchange="this.form.submit()">
                 </form>
                 <span class="<%= todo.isCompleted() ? "completed" : "" %>">
@@ -44,9 +43,8 @@
                 </span>
                 
                 <!-- Delete button -->
-                <form method="post" action="todos" style="display:inline;">
-                    <input type="hidden" name="action" value="delete">
-                    <input type="hidden" name="deleteId" value="<%= todo.getId() %>">
+                <form method="post" action="deleteTodo" style="display:inline;">
+                    <input type="hidden" name="id" value="<%= todo.getId() %>">
                     <button type="submit">Delete</button>
                 </form>
             </li>
@@ -57,8 +55,7 @@
     </ul>
 
     <!-- Clear completed tasks -->
-    <form method="post" action="todos">
-        <input type="hidden" name="action" value="clearCompleted">
+    <form method="post" action="clearTodos">
         <button type="submit">Clear Completed Tasks</button>
     </form>
 
