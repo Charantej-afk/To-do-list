@@ -1,69 +1,37 @@
 package com.charan.todo;
 
-import jakarta.servlet.ServletException;
-import jakarta.servlet.annotation.WebServlet;
-import jakarta.servlet.http.HttpServlet;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-
+import javax.servlet.*;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.*;
 import java.io.IOException;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.ArrayList;
 
-@WebServlet(name = "TodoServlet", urlPatterns = "/todos")
+@WebServlet("/todos") // Mapped to /todos URL
 public class TodoServlet extends HttpServlet {
 
-    private final AtomicInteger idCounter = new AtomicInteger(1);
-    private final CopyOnWriteArrayList<TodoItem> todos = new CopyOnWriteArrayList<>();
+    private List<TodoItem> todos = new ArrayList<>();
 
     @Override
-    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        req.setAttribute("todos", List.copyOf(todos));
-        req.getRequestDispatcher("/WEB-INF/views/todo.jsp").forward(req, resp);
+    public void init() throws ServletException {
+        // Initialize with some sample todos
+        todos.add(new TodoItem(1, "Buy Groceries"));
+        todos.add(new TodoItem(2, "Finish Homework"));
     }
 
     @Override
-    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        String action = req.getParameter("action");
-
-        if ("add".equals(action)) {
-            handleAdd(req);
-        } else if ("toggle".equals(action)) {
-            handleToggle(req);
-        } else if ("clearCompleted".equals(action)) {
-            todos.removeIf(TodoItem::isCompleted);
-        }
-
-        resp.sendRedirect(req.getContextPath() + "/todos");
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        request.setAttribute("todos", todos);
+        request.getRequestDispatcher("/WEB-INF/views/todos.jsp").forward(request, response);
     }
 
-    private void handleAdd(HttpServletRequest req) {
-        String description = req.getParameter("description");
-        if (description == null) {
-            return;
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        String newTodo = request.getParameter("todo");
+        if (newTodo != null && !newTodo.trim().isEmpty()) {
+            int id = todos.size() + 1;
+            todos.add(new TodoItem(id, newTodo));
         }
-
-        String trimmed = description.trim();
-        if (!trimmed.isEmpty()) {
-            todos.add(new TodoItem(idCounter.getAndIncrement(), trimmed));
-        }
-    }
-
-    private void handleToggle(HttpServletRequest req) {
-        String idParam = req.getParameter("toggleId");
-        if (idParam == null) {
-            return;
-        }
-
-        try {
-            int id = Integer.parseInt(idParam);
-            todos.stream()
-                    .filter(todo -> todo.getId() == id)
-                    .findFirst()
-                    .ifPresent(TodoItem::toggle);
-        } catch (NumberFormatException ignored) {
-            // ignore malformed toggle id
-        }
+        response.sendRedirect("todos");
     }
 }
