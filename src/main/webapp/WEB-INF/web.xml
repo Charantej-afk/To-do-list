@@ -1,11 +1,17 @@
+cd ~/To-do-list
+
+# Create web.xml with all servlet mappings
+mkdir -p src/main/webapp/WEB-INF
+cat > src/main/webapp/WEB-INF/web.xml << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
 <web-app xmlns="https://jakarta.ee/xml/ns/jakartaee"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee https://jakarta.ee/xml/ns/jakartaee/web-app_5_0.xsd"
+         xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee
+                             https://jakarta.ee/xml/ns/jakartaee/web-app_5_0.xsd"
          version="5.0">
-
-    <display-name>Todo WebApp</display-name>
-
-    <!-- Servlet Configuration -->
+    <display-name>Todo Web Application</display-name>
+    
+    <!-- Main Todo Servlet -->
     <servlet>
         <servlet-name>TodoServlet</servlet-name>
         <servlet-class>com.charantejafk.todo.TodoServlet</servlet-class>
@@ -14,5 +20,60 @@
         <servlet-name>TodoServlet</servlet-name>
         <url-pattern>/todos</url-pattern>
     </servlet-mapping>
-
+    
+    <!-- Add Todo Servlet -->
+    <servlet>
+        <servlet-name>AddTodoServlet</servlet-name>
+        <servlet-class>com.charantejafk.todo.AddTodoServlet</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>AddTodoServlet</servlet-name>
+        <url-pattern>/addTodo</url-pattern>
+    </servlet-mapping>
+    
+    <!-- Update Todo Servlet -->
+    <servlet>
+        <servlet-name>UpdateTodoServlet</servlet-name>
+        <servlet-class>com.charantejafk.todo.UpdateTodoServlet</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>UpdateTodoServlet</servlet-name>
+        <url-pattern>/updateTodo</url-pattern>
+    </servlet-mapping>
+    
+    <!-- Delete Todo Servlet -->
+    <servlet>
+        <servlet-name>DeleteTodoServlet</servlet-name>
+        <servlet-class>com.charantejafk.todo.DeleteTodoServlet</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>DeleteTodoServlet</servlet-name>
+        <url-pattern>/deleteTodo</url-pattern>
+    </servlet-mapping>
+    
+    <!-- Session configuration -->
+    <session-config>
+        <session-timeout>30</session-timeout>
+    </session-config>
+    
+    <!-- Welcome files -->
+    <welcome-file-list>
+        <welcome-file>index.jsp</welcome-file>
+    </welcome-file-list>
 </web-app>
+EOF
+
+# Also update the index.jsp to point to the correct URL
+cat > src/main/webapp/index.jsp << 'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Todo List Application</title>
+</head>
+<body>
+    <h1>Todo Application</h1>
+    <p>If you can see this, the application is deployed successfully!</p>
+    <p><a href="todos">Go to Todo List</a></p>
+</body>
+</html>
+EOF
