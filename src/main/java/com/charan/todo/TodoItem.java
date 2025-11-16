@@ -1,7 +1,10 @@
 package com.charantejafk.todo;
 
-public class TodoItem {
+import java.io.Serializable;
 
+public class TodoItem implements Serializable {
+    private static final long serialVersionUID = 1L;
+    
     private int id;
     private String description;
     private boolean completed;
@@ -12,19 +15,13 @@ public class TodoItem {
         this.completed = false;
     }
 
-    public int getId() {
-        return id;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public boolean isCompleted() {
-        return completed;
-    }
-
-    public void setCompleted(boolean completed) {
-        this.completed = completed;
-    }
+    // Getters and setters
+    public int getId() { return id; }
+    public void setId(int id) { this.id = id; }
+    
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+    
+    public boolean isCompleted() { return completed; }
+    public void setCompleted(boolean completed) { this.completed = completed; }
 }
