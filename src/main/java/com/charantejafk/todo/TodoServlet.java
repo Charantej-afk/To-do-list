@@ -6,11 +6,13 @@ import jakarta.servlet.annotation.WebServlet;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @WebServlet("/todos")
 public class TodoServlet extends HttpServlet {
     
     private transient List<TodoItem> todos = new ArrayList<>();
+    private transient AtomicInteger idCounter = new AtomicInteger(3); // Start from 3 since we have 2 initial items
 
     @Override
     public void init() throws ServletException {
@@ -32,16 +34,29 @@ public class TodoServlet extends HttpServlet {
         if ("add".equals(action)) {
             String description = request.getParameter("description");
             if (description != null && !description.trim().isEmpty()) {
-                int id = todos.size() + 1;
-                todos.add(new TodoItem(id, description));
+                int id = idCounter.getAndIncrement();
+                todos.add(new TodoItem(id, description.trim()));
             }
         } else if ("toggle".equals(action)) {
-            int toggleId = Integer.parseInt(request.getParameter("toggleId"));
-            for (TodoItem todo : todos) {
-                if (todo.getId() == toggleId) {
-                    todo.setCompleted(!todo.isCompleted());
-                    break;
+            try {
+                int toggleId = Integer.parseInt(request.getParameter("toggleId"));
+                for (TodoItem todo : todos) {
+                    if (todo.getId() == toggleId) {
+                        todo.setCompleted(!todo.isCompleted());
+                        break;
+                    }
                 }
+            } catch (NumberFormatException e) {
+                // Log error
+                System.err.println("Invalid toggleId: " + request.getParameter("toggleId"));
+            }
+        } else if ("delete".equals(action)) {
+            try {
+                int deleteId = Integer.parseInt(request.getParameter("deleteId"));
+                todos.removeIf(todo -> todo.getId() == deleteId);
+            } catch (NumberFormatException e) {
+                // Log error
+                System.err.println("Invalid deleteId: " + request.getParameter("deleteId"));
             }
         } else if ("clearCompleted".equals(action)) {
             todos.removeIf(TodoItem::isCompleted);
