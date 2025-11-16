@@ -17,7 +17,7 @@
     </properties>
 
     <dependencies>
-        <!-- Servlet API dependency (Jakarta version) -->
+        <!-- Jakarta Servlet API dependency -->
         <dependency>
             <groupId>jakarta.servlet</groupId>
             <artifactId>jakarta.servlet-api</artifactId>
@@ -25,12 +25,27 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- You can add other dependencies here like JDBC or logging if required -->
+        <!-- Tomcat for servlet container -->
+        <dependency>
+            <groupId>org.apache.tomcat</groupId>
+            <artifactId>tomcat-catalina</artifactId>
+            <version>9.0.45</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- JSP API Dependency -->
+        <dependency>
+            <groupId>org.apache.jasper</groupId>
+            <artifactId>jasper-api</artifactId>
+            <version>4.0.0</version>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 
     <build>
         <finalName>todo-webapp</finalName>
         <plugins>
+            <!-- Maven Compiler Plugin -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -43,3 +58,4 @@
         </plugins>
     </build>
 </project>
+
